@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="css/fullcalendar.css">
+    <script type="text/javascript" src="js/moment.min.js"></script>
+    <script type="text/javascript" src="js/jquery-3.1.1.js"></script>
+    <script type="text/javascript" src="js/jquery-ui.js"></script>
+    <script type="text/javascript" src="js/fullcalendar.js"></script>
+    <script type="text/javascript" src="js/locale-all.js"></script>
+
+    <link rel="stylesheet" href="css/jquery-ui.css">
+    <!--календарь datetimepicker для выбора даты-->
+    <script type="text/javascript" src="js/moment-with-locales.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="js/bootstrap-datetimepicker.min.js"></script>
+    <link rel="stylesheet" href="css/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/bootstrap-datetimepicker.min.css" />
+    <title>Organizer</title>
+    <script type="text/javascript">
+        $(document).ready(function() {
+            // Настройка органайзера
+            $('#calendar').fullCalendar({
+                locale: 'ru',
+                navLinks: true,
+                editable: false,                // Запрет изменения задач в календаре
+                eventLimit: true,
+                eventClick: clickTask,
+                eventDrop: editTask,            // Не реализовано
+                eventResize: editTask,          // Не реализовано
+                customButtons: {
+                    buttonAddTask: {
+                        text: 'Запланировать',
+                        click: openDialogAddTask
+                    }
+                },
+                header: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'month,agendaWeek,agendaDay,listWeek,buttonAddTask'
+                },
+                eventSources: [{
+                        url: '?operation=get_task',
+                        type: 'POST',
+                        error: function() {
+                            alert('Не удалось загрузить задачи!');
+                        }}]
+            });
+            // Настройка диалогового меню
+            $('#dialog').dialog({
+                modal:true,
+                title: "Новое событие",
+                autoOpen: false,
+                resizable: false,
+                width: 480
+            });
+            // Клик по задаче
+            function clickTask(calEvent, jsEvent, view) {
+                var stert = calEvent.start.format().split('T');
+                var end = calEvent.end ? calEvent.end.format().split('T') : stert;
+                var description = calEvent.description ? calEvent.description : '';
+                var form = getForm(calEvent.title, description, stert[0].split('-').reverse().join('.'), end[0].split('-').reverse().join('.'),
+                    stert[1] ? stert[1].substr(0,5) : '', end[1] ? end[1].substr(0,5) : '', true);
+                $('#dialog').dialog('option', 'buttons', { "Отменить": function(){removeTask(calEvent);} });
+                $('#dialog').html(form).dialog("open");
+            }
+            // Удаление задачи
+            function removeTask(calEvent) {
+                $.ajax({
+                    url:'?operation=remove_task',
+                    type:'POST',
+                    data: {"task": JSON.stringify({'id': calEvent.id})},
+                    cache: false,
+                    dataType: 'json',
+                    success: function() {
+                        $('#calendar').fullCalendar ( 'removeEvents', calEvent.id )},
+                    error: function() {
+                        alert('Ошибка отправки');
+                        $('#calendar').fullCalendar('updateEvent', event);
+                    }
+                });
+                $('#dialog').dialog("close");
+            }
+            // Форма для заполнения полей задичи или для цдаления
+            function getForm(title, description, startDate, endDate, startTime, endTime, readonly){
+                var start ='';
+                var end ='';
+                var check = '';
+                readonly = readonly === false ? '' : 'disabled reaonly';
+                if(startTime && endTime) {
+                    start = '<input id="startTime" class="form-control" value="' + startTime + '"' + readonly + '>';
+                    end = '<input id="endTime" class="form-control" value="' + endTime + '"' + readonly + '>';
+                }
+                else{
+                    check = 'checked';
+                }
+                return '<div><table style="width: 100%"><tr><td><label>Название</label></td><td><input type="text" id="title" class="form-control" value="' +
+                    title + '" style="width:100%;" ' + readonly + '></td></tr><tr><td><label>Дата начала</label></td><td><input id="startDate" class="form-control"' +
+                    ' value="' +  startDate + '" ' +readonly+ '>' + start + '</td></tr><tr><td><label>Дата окончания</label></td><td><input id="endDate"' +
+                    ' class="form-control" value="' + endDate + '" ' + readonly + '>' + end + '</td></tr><tr><td><label>Весь день</label></td><td>' +
+                    '<input id="allDay" type="checkbox" ' + check + ' ' + readonly + '></td></tr><tr><td colspan="2"><label>Описание</label></td></tr><tr>' +
+                    '<td colspan="2"><textarea id="description" class="form-control" rows="3" maxlength="150" style="width:100%;" ' + readonly + '>' +
+                    description + '</textarea></td></tr></table></div>';
+            }
+            // Изменение задач
+            function editTask(event, delta, revertFunc) {
+                alert('Изменение задачи (не реализовано)');
+            }
+
+
+            // Открытие окна для добавления задачи
+            function openDialogAddTask() {
+                var selectedDate = ($('#calendar').fullCalendar('getDate')).format().substr(0,10).split('-').reverse().join('.');
+                var now = new Date();
+                var nowDate = now.getDate() + '.' + (now.getMonth() < 9 ? '0' + (now.getMonth() + 1) : (now.getMonth() + 1)) + '.' + now.getFullYear();
+                var date = '', startTime = '', endTime = '';
+                if (selectedDate != nowDate){
+                    date = selectedDate;
+                    startTime = '08:00';
+                    endTime = '08-30';
+                }
+                else {
+                    date = nowDate;
+                    startTime = getTime(now.getHours(), now.getMinutes());
+                    endTime = getTime(now.getHours(), (now.getMinutes() + 30));
+                }
+                var form = getForm('', '', date, date, startTime, endTime, false);
+                $('#dialog').dialog('option', 'buttons', { "Добавить": addTask });
+                $('#dialog').html(form);
+                $('#startDate, #endDate').datetimepicker({
+                    language: 'ru',
+                    pickTime: false,
+                    defaultDate: new Date()
+                });
+
+                $('#startTime, #endTime').datetimepicker({
+                    language: 'ru',
+                    pickDate: false,
+                    minuteStepping: 30
+                });
+                $('#dialog').dialog("open");
+                function getTime(hour, minutes) {
+                    var addHours = Math.floor(minutes / 30);
+                    minutes = ((addHours + 1) * 30) % 60;
+                    if(!minutes){
+                        minutes = '00';
+                    }
+                    return (hour + addHours) + ':' + minutes;
+                }
+            }
+            // Отправка запроса для добавления задачи
+            function addTask() {
+                var task = {};
+                task.start = $('#startDate').val().split('.').reverse().join('-');
+                task.end = $('#endDate').val().split('.').reverse().join('-');
+                task.title = $('#title').val();
+                task.description = $('#description').val();
+                if (!$('#allDay').is(':checked')){
+                    task.start += 'T' + $('#startTime').val() + ':00';
+                    task.end +=  'T' + $('#endTime').val() + ':00';
+                }
+                $.ajax({
+                    url:'?operation=add_task',
+                    type:'POST',
+                    data: {"task": JSON.stringify(task)},
+                    cache: false,
+                    dataType: 'json',
+                    success: function(response) {
+                        $('#calendar').fullCalendar('renderEvent', {
+                            id: response.id,
+                            title: task.title,
+                            start: task.start,
+                            end: task.end,
+                            description: task.description
+                        });
+                    },
+                    error: function() {
+                        alert('Ошибка отправки');
+                        $('#calendar').fullCalendar('updateEvent', event);
+                    }
+                });
+                $('#dialog').dialog("close");
+            }
+            // Закрытие меню календаря и быбора времени при потере фокуса
+            $('body').on('mouseleave', '.dropdown-menu', function (e) {
+                $(this).removeClass('picker-open').removeClass('bottom').hide();
+            });
+            // Клик в чекбоксе "Весь день"
+            $('body').on('click', '#allDay', function (e) {
+                if ($(this).is(':checked')){
+                    $('#startTime, #endTime').hide();
+                }
+                else {
+                    $('#startTime, #endTime').show();
+                }
+            });
+            // Сохранение в файл
+            $('#saveBtn').click(function () {
+                $.ajax({
+                    url: '?operation=save_tasks',
+                    success: function(response) {
+                        if(response.status == 'OK'){
+                            alert('Задачи сохранены');
+                        }
+                    },
+                    error: function() {
+                        alert('Не удалось сохранить');
+                    }
+                });
+            })
+        });
+    </script>
+    <style>
+        body {
+            margin: 40px 10px;
+            padding: 0;
+            font-family: "Lucida Grande",Helvetica,Arial,Verdana,sans-serif;
+            font-size: 14px;
+        }
+        #calendar {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        #startDate, #endDate{
+            display: inline-block;
+            width: 100px;
+        }
+        #startTime, #endTime{
+            display: inline-block;
+            width: 80px;
+        }
+    </style>
+</head>
+<body>
+<div id="content">
+    <button type="button" id="saveBtn" class="btn btn-warning">Сохранить изменения</button>
+    <div id="calendar"></div>
+    <div id="dialog"></div>
+</div>
+</body>
+</html>
